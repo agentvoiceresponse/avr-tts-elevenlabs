@@ -1,79 +1,94 @@
 /**
  * index.js
- * This file is the main entrypoint for the application.
- * @author  Giuseppe Careri
- * @see https://www.gcareri.com
+ * ElevenLabs Text-to-Speech Service
+ * This service converts text to speech using ElevenLabs API and streams the audio in chunks.
+ * @author  AgentVoiceResponse
+ * @see https://www.agentvoiceresponse.com
  */
+
 const express = require('express');
 const { ElevenLabsClient } = require('elevenlabs');
-const { Readable } = require('stream');
 
 require('dotenv').config();
 
-const app = express();
+// Constants
+const CHUNK_SIZE = 320; // 40ms of audio at 8kHz (8000 * 0.04)
+const DEFAULT_PORT = 6007;
 
+// Initialize Express app
+const app = express();
 app.use(express.json());
 
 /**
- * Handle incoming HTTP POST request with JSON body containing a text string,
- * and streams the text-to-speech audio response back to the client.
- *
- * @param {express.Request} req
- * @param {express.Response} res
+ * Converts text to speech using ElevenLabs API and streams the audio in chunks
+ * @param {express.Request} req - Express request object containing text in body
+ * @param {express.Response} res - Express response object for streaming audio
  */
 const handleTextToSpeech = async (req, res) => {
   const { text } = req.body;
 
+  // Validate input
   if (!text) {
     return res.status(400).json({ message: 'Text is required' });
   }
 
-  res.setHeader('Content-Type', 'audio/basic');  // Changed to audio/basic for µ-law format
+  // Set response headers for audio streaming
+  res.setHeader('Content-Type', 'audio/basic');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
   try {
+    // Initialize ElevenLabs client
     const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+
+    // Configure TTS request
     const requestConfig = {
-      output_format: "pcm_8000",  // µ-law format at 8kHz
+      output_format: "pcm_8000",  // 8kHz PCM format
       text: text,
-      model_id: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2',
-      // voice_settings: {
-      //   stability: 0.5,
-      //   similarity_boost: 0.75,
-      //   style: 0,
-      //   use_speaker_boost: true
-      // }
+      model_id: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2'
     };
 
-    console.log('Request config:', requestConfig);
+    console.log('Processing TTS request:', requestConfig);
 
-    const audioStream = await client.textToSpeech.convertAsStream(process.env.ELEVENLABS_VOICE_ID, requestConfig);
+    // Get audio stream from ElevenLabs
+    const audioStream = await client.textToSpeech.convertAsStream(
+      process.env.ELEVENLABS_VOICE_ID,
+      requestConfig
+    );
 
-    // Convert stream to buffer
+    // Collect all chunks from the stream
     const chunks = [];
     for await (const chunk of audioStream) {
       chunks.push(chunk);
     }
+
+    // Combine chunks into a single buffer
     const buffer = Buffer.concat(chunks);
     const dataArray = new Uint8Array(buffer);
 
-    // Send data in chunks of 320 bytes
-    for (let i = 0; i < dataArray.length; i += 320) {
-      const chunk = dataArray.slice(i, i + 320);
+    // Stream audio in fixed-size chunks
+    for (let i = 0; i < dataArray.length; i += CHUNK_SIZE) {
+      const chunk = dataArray.slice(i, i + CHUNK_SIZE);
       res.write(chunk);
     }
+
+    // End the response stream
     res.end();
 
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ message: 'Error communicating with ElevenLabs' });
+    console.error('TTS processing error:', error);
+    res.status(500).json({ 
+      message: 'Error processing text-to-speech request',
+      error: error.message 
+    });
   }
 }
 
+// Define routes
 app.post('/text-to-speech-stream', handleTextToSpeech);
 
-const port = process.env.PORT || 6007;
+// Start server
+const port = process.env.PORT || DEFAULT_PORT;
 app.listen(port, () => {
-  console.log(`Elevenlabs listening on port ${port}`);
+  console.log(`ElevenLabs TTS service listening on port ${port}`);
 });
