@@ -5,9 +5,8 @@
  * @see https://www.gcareri.com
  */
 const express = require('express');
-const ffmpeg = require('fluent-ffmpeg');
-const { PassThrough } = require('stream');
-const axios = require('axios');
+const { ElevenLabsClient } = require('elevenlabs');
+const { Readable } = require('stream');
 
 require('dotenv').config();
 
@@ -29,59 +28,45 @@ const handleTextToSpeech = async (req, res) => {
     return res.status(400).json({ message: 'Text is required' });
   }
 
-  res.setHeader('Content-Type', 'audio/wav');
+  res.setHeader('Content-Type', 'audio/basic');  // Changed to audio/basic for µ-law format
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
   try {
+    const client = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
+    const requestConfig = {
+      output_format: "pcm_8000",  // µ-law format at 8kHz
+      text: text,
+      model_id: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2',
+      // voice_settings: {
+      //   stability: 0.5,
+      //   similarity_boost: 0.75,
+      //   style: 0,
+      //   use_speaker_boost: true
+      // }
+    };
 
-    const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
-      {
-        text: text,
-        model_id: process.env.ELEVENLABS_MODEL_ID || 'eleven_monolingual_v1', 
-        voice_settings: {
-          "stability": 0.5,
-          "similarity_boost": 0.75,
-          "style": 0,
-          "use_speaker_boost": true
-        }
-      },
-      {
-        headers: {
-          'accept': 'audio/mpeg',
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'arraybuffer', // Tell Axios to expect binary data
-      }
-    );
+    console.log('Request config:', requestConfig);
 
-    const bufferStream = new PassThrough();
-    bufferStream.end(response.data);
+    const audioStream = await client.textToSpeech.convertAsStream(process.env.ELEVENLABS_VOICE_ID, requestConfig);
 
-    ffmpeg(bufferStream)
-      .audioChannels(1)        // Convert to mono
-      .audioFrequency(8000)     // Set sample rate to 8kHz
-      .audioCodec('pcm_s16le')  // Set codec to 16-bit linear PCM
-      .format('wav')            // Output format as WAV
-      .on('start', (commandLine) => {
-        console.log('Starting audio streaming:', commandLine);
-      })
-      .on('codecData', (data) => {
-        console.log(data);
-      })
-      .on('error', (err) => {
-        console.error('Error during conversion: ' + err.message);
-        res.status(500).send('Error converting audio.');
-      })
-      .on('end', () => {
-        console.log('Streaming finished.');
-      })
-      .pipe(res, { end: true });
+    // Convert stream to buffer
+    const chunks = [];
+    for await (const chunk of audioStream) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    const dataArray = new Uint8Array(buffer);
+
+    // Send data in chunks of 320 bytes
+    for (let i = 0; i < dataArray.length; i += 320) {
+      const chunk = dataArray.slice(i, i + 320);
+      res.write(chunk);
+    }
+    res.end();
 
   } catch (error) {
-    console.error(error.response.data.toString());
+    console.error('Error:', error);
     res.status(500).json({ message: 'Error communicating with ElevenLabs' });
   }
 }
