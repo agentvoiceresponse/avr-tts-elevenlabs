@@ -1,9 +1,10 @@
 {
   "name": "avr-tts-elevenlabs",
-  "version": "1.1.1",
-  "author": "Giuseppe Careri",
-  "description": "",
+  "version": "1.2.0",
+  "author": "Agent Voice Response <info@agentvoiceresponse.com>",
+  "description": "This repository provides a text-to-speech service using ElevenLabs API integrated with the Agent Voice Response system.",
   "main": "index.js",
+  "license": "MIT",
   "scripts": {
     "start": "node .",
     "start:dev": "nodemon --inspect ./index.js",
@@ -21,5 +22,10 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
-  }
+  },
+  "contributors": [{
+    "name": "Giuseppe Careri",
+    "email": "info@gcareri.com",
+    "url": "https://github.com/gcareri"
+  }]
 }
