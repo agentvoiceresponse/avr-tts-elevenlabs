@@ -12,7 +12,6 @@ const { ElevenLabsClient } = require('elevenlabs');
 require('dotenv').config();
 
 // Constants
-const CHUNK_SIZE = 320; // 40ms of audio at 8kHz (8000 * 0.04)
 const DEFAULT_PORT = 6007;
 
 // Initialize Express app
@@ -50,29 +49,14 @@ const handleTextToSpeech = async (req, res) => {
 
     console.log('Processing TTS request:', requestConfig);
 
-    // Get audio stream from ElevenLabs
     const audioStream = await client.textToSpeech.convertAsStream(
       process.env.ELEVENLABS_VOICE_ID,
       requestConfig
     );
 
-    // Collect all chunks from the stream
-    const chunks = [];
     for await (const chunk of audioStream) {
-      chunks.push(chunk);
-    }
-
-    // Combine chunks into a single buffer
-    const buffer = Buffer.concat(chunks);
-    const dataArray = new Uint8Array(buffer);
-
-    // Stream audio in fixed-size chunks
-    for (let i = 0; i < dataArray.length; i += CHUNK_SIZE) {
-      const chunk = dataArray.slice(i, i + CHUNK_SIZE);
       res.write(chunk);
     }
-
-    // End the response stream
     res.end();
 
   } catch (error) {
