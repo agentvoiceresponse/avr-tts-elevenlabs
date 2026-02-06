@@ -16,12 +16,12 @@
     "url": "https://github.com/agentvoiceresponse/avr-tts-elevenlabs.git"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "elevenlabs": "^1.56.0",
-    "express": "^4.21.0"
+    "dotenv": "^17.2.4",
+    "elevenlabs": "^1.59.0",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.11"
   },
   "contributors": [{
     "name": "Giuseppe Careri",
